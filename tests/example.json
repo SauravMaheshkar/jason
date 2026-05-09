@@ -1,0 +1,31 @@
+{
+  "string": "hello",
+  "number": 42,
+  "float": 3.14,
+  "boolean": true,
+  "null": null,
+  "array": [
+    "string",
+    42,
+    3.14,
+    true,
+    false,
+    null,
+    [
+      1,
+      2,
+      3
+    ],
+    {
+      "nested": "object"
+    }
+  ],
+  "object": {
+    "key": "value",
+    "nested": {
+      "inner": {
+        "deep": "value"
+      }
+    }
+  }
+}
