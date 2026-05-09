@@ -1,15 +1,15 @@
-name: Test
+name: tests
 
 on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Build
-        run: make
+            - name: Build
+              run: make
 
-      - name: Run tests
-        run: make test && ./build/test
+            - name: Run tests
+              run: make test && ./build/test
