@@ -2,3 +2,6 @@
 
 build/
 *.o
+tests/nativejson-benchmark/
+tests/benchmark_report.md
+performance_*.csv

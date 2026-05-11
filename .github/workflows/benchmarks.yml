@@ -1,0 +1,27 @@
+name: benchmarks
+
+on: [push, pull_request]
+
+jobs:
+    benchmark:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential curl python3
+
+            - name: Run benchmark
+              run: make benchmark
+
+            - name: Upload benchmark results
+              uses: actions/upload-artifact@v4
+              with:
+                  name: benchmark-results
+                  path: |
+                      tests/benchmark_report.md
+                      tests/nativejson-benchmark/result/*.csv
+                      tests/nativejson-benchmark/result/*.md
+                  if-no-files-found: ignore
