@@ -4,7 +4,6 @@
 #include <type_traits>
 #include <variant>
 
-using namespace JasonValue;
 using namespace JasonParser;
 
 static void GenStat(Stat &stat, const Value &v) {

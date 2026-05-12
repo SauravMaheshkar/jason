@@ -1,9 +1,5 @@
 [![tests](https://github.com/SauravMaheshkar/jason/actions/workflows/ci.yml/badge.svg)](https://github.com/SauravMaheshkar/jason/actions/workflows/ci.yml)
 
-### Resources
-
-* [Let's Rebuild a JSON Parser in C++ by @SalarAlo08](https://youtu.be/RUTADqhi3tQ?si=odI5u8RBWmxzmsvG)
-
 ## Benchmarks
 
 Benchmarking is done via [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark).
@@ -15,11 +11,11 @@ Run `make benchmark` to generate the full report.
 
 | Test | Score |
 | :---: | :---: |
-| Parse Validation | 23/34 (68%) |
-| Parse Double | 26/66 (39%) |
-| Parse String | 2/9 (22%) |
+| Parse Validation | 26/34 (76%) |
+| Parse Double | 57/66 (86%) |
+| Parse String | 4/9 (44%) |
 | Roundtrip | - |
-| **Overall** | **51/109 (47%)** |
+| **Overall** | **87/109 (80%)** |
 
 #### Nlohmann (C++11)
 
@@ -41,24 +37,28 @@ Run `make benchmark` to generate the full report.
 | Roundtrip | 27/27 (100%) |
 | **Overall** | **118/136 (87%)** |
 
-### Performance
+## Performance
 
 | Test | File | jason (C++17) | Nlohmann (C++11) | RapidJSON (C++) |
 | :---: | :---: | :---: | :---: | :---: |
-| Parse | canada.json | N/A | 18.306 ms | 4.178 ms |
-| Parse | citm_catalog.json | N/A | 5.982 ms | 2.660 ms |
-| Parse | twitter.json | N/A | 4.502 ms | 1.863 ms |
-| Stringify | canada.json | N/A | 61.909 ms | 11.182 ms |
-| Stringify | citm_catalog.json | N/A | 4.796 ms | 1.385 ms |
-| Stringify | twitter.json | N/A | 3.212 ms | 1.592 ms |
-| Prettify | canada.json | N/A | 80.476 ms | 12.951 ms |
-| Prettify | citm_catalog.json | N/A | 8.432 ms | 1.838 ms |
-| Prettify | twitter.json | N/A | 3.797 ms | 1.756 ms |
-| Statistics | canada.json | N/A | 0.891 ms | 0.581 ms |
-| Statistics | citm_catalog.json | N/A | 0.426 ms | 0.178 ms |
-| Statistics | twitter.json | N/A | 0.420 ms | 0.088 ms |
-| Code size | jsonstat | 107,464 B | 81,160 B | 56,232 B |
+| Parse | canada.json | 17.332 ms | 17.451 ms | 4.854 ms |
+| Parse | citm_catalog.json | 8.478 ms | 6.018 ms | 2.749 ms |
+| Parse | twitter.json | 4.227 ms | 4.523 ms | 1.867 ms |
+| Stringify | canada.json | N/A | 62.003 ms | 11.175 ms |
+| Stringify | citm_catalog.json | N/A | 4.937 ms | 1.389 ms |
+| Stringify | twitter.json | N/A | 3.309 ms | 1.596 ms |
+| Prettify | canada.json | N/A | 80.563 ms | 13.328 ms |
+| Prettify | citm_catalog.json | N/A | 8.578 ms | 1.846 ms |
+| Prettify | twitter.json | N/A | 3.861 ms | 1.742 ms |
+| Statistics | canada.json | 0.468 ms | 1.009 ms | 0.582 ms |
+| Statistics | citm_catalog.json | 0.185 ms | 0.468 ms | 0.178 ms |
+| Statistics | twitter.json | 0.083 ms | 0.470 ms | 0.088 ms |
+| Code size | jsonstat | 106,376 B | 81,160 B | 56,232 B |
 
 > **Note on jason Performance**
 >
-> `jason` does not produce parse/stringify/prettify performance numbers because it fails to parse the standard benchmark test files (`canada.json`, `citm_catalog.json`, `twitter.json`). The current implementation is intentionally minimal and lacks support for negative numbers, scientific notation, Unicode escapes, and many backslash escape sequences. Therefore the benchmark framework marks these capabilities as "Not support".
+> `jason` does not produce stringify/prettify performance numbers because the current implementation is intentionally minimal and only supports parsing.
+
+## Resources
+
+* [Let's Rebuild a JSON Parser in C++ by @SalarAlo08](https://youtu.be/RUTADqhi3tQ?si=odI5u8RBWmxzmsvG)
