@@ -80,7 +80,7 @@ cd ..
 
 # Build the benchmark binary only (avoid PHP dependency for HTML generation)
 echo "=== Building benchmark binary (this may take a while) ==="
-make bin/nativejson_release_x64_gmake CONFIG=release_x64
+make CC=clang CXX=clang++ CXXFLAGS="-stdlib=libc++" LDFLAGS="-stdlib=libc++" bin/nativejson_release_x64_gmake CONFIG=release_x64
 
 # Run the benchmark binary from bin/ so relative data paths resolve correctly
 echo "=== Running benchmark ==="

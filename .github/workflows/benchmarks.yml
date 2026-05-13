@@ -9,13 +9,16 @@ on:
 jobs:
     benchmark:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: write
         steps:
             - uses: actions/checkout@v4
 
             - name: Install dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y build-essential curl python3
+                  sudo apt-get install -y build-essential curl python3 clang libc++-dev libc++abi-dev
 
             - name: Run benchmark
               run: make benchmark
