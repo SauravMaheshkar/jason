@@ -39,6 +39,9 @@ private:
     advance();
   }
   bool try_read(char c) { return current() == c ? (advance(), true) : false; }
+  Value
+  parse_value(); // EDGE CASE: split recursive parsing from top-level parse so
+                 // only the outermost call rejects trailing garbage
   std::string parse_string();
   double parse_number();
   std::optional<Value> try_parse_keyword();
@@ -47,7 +50,17 @@ private:
 };
 
 inline Value parser::parse() {
-  whitespace();
+  Value v = parse_value();
+  whitespace(); // EDGE CASE: allow whitespace between value and EOF, but reject
+                // anything else
+  if (!is_at_end()) // EDGE CASE: reject trailing garbage after top-level value
+                    // (e.g. ["a"], or {} "extra")
+    throw std::runtime_error("Unexpected trailing data");
+  return v;
+}
+
+inline Value parser::parse_value() {
+  whitespace(); // EDGE CASE: skip leading whitespace before every nested value
   switch (current()) {
   case '{':
     return Value{parse_object()};
@@ -60,7 +73,7 @@ inline Value parser::parse() {
       return Value{parse_number()};
     if (auto kw = try_parse_keyword())
       return *kw;
-    throw std::runtime_error("Unexpected character: ");
+    throw std::runtime_error("Unexpected character");
   }
 }
 
@@ -70,6 +83,10 @@ inline std::string parser::parse_string() {
   while (current() != '"') {
     if (is_at_end() || current() == '\n')
       throw std::runtime_error("Unterminated string");
+    if (static_cast<unsigned char>(current()) <
+        0x20) // EDGE CASE: JSON strings must not contain literal control
+              // characters (U+0000–U+001F)
+      throw std::runtime_error("Invalid control character in string");
     if (try_read('\\')) {
       char c = advance();
       switch (c) {
@@ -97,6 +114,46 @@ inline std::string parser::parse_string() {
       case 't':
         s += '\t';
         break;
+      case 'u': { // EDGE CASE: handle \uXXXX escapes including surrogate pairs
+                  // for code points above U+FFFF
+        auto hex_digit = [&]() {
+          char hc = advance();
+          if (hc >= '0' && hc <= '9')
+            return hc - '0';
+          if (hc >= 'a' && hc <= 'f')
+            return hc - 'a' + 10;
+          if (hc >= 'A' && hc <= 'F')
+            return hc - 'A' + 10;
+          throw std::runtime_error("Invalid hex digit");
+        };
+        int cp = (hex_digit() << 12) | (hex_digit() << 8) | (hex_digit() << 4) |
+                 hex_digit();
+        if (cp >= 0xD800 && cp <= 0xDBFF) {
+          if (!try_read('\\') || advance() != 'u')
+            throw std::runtime_error("Expected low surrogate");
+          int low = (hex_digit() << 12) | (hex_digit() << 8) |
+                    (hex_digit() << 4) | hex_digit();
+          if (low < 0xDC00 || low > 0xDFFF)
+            throw std::runtime_error("Invalid low surrogate");
+          cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+        }
+        if (cp < 0x80) {
+          s += static_cast<char>(cp);
+        } else if (cp < 0x800) {
+          s += static_cast<char>(0xC0 | (cp >> 6));
+          s += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp < 0x10000) {
+          s += static_cast<char>(0xE0 | (cp >> 12));
+          s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+          s += static_cast<char>(0x80 | (cp & 0x3F));
+        } else {
+          s += static_cast<char>(0xF0 | (cp >> 18));
+          s += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+          s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+          s += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        break;
+      }
       default:
         throw std::runtime_error("Invalid escape sequence");
       }
@@ -111,17 +168,38 @@ inline std::string parser::parse_string() {
 inline double parser::parse_number() {
   size_t start = m_current;
   try_read('-');
+  if (!std::isdigit(
+          current())) // EDGE CASE: reject "-" or "e" alone as a number
+    throw std::runtime_error("Invalid number");
   while (std::isdigit(current()))
     advance();
-  if (try_read('.'))
-    while (std::isdigit(current()))
-      advance();
-  if (try_read('e') || try_read('E')) {
-    try_read('+') || try_read('-');
+  size_t digit_start = (m_source_code[start] == '-') ? start + 1 : start;
+  if (m_current > digit_start + 1 &&
+      m_source_code[digit_start] ==
+          '0') // EDGE CASE: reject leading zeros like "013" (JSON forbids them)
+    throw std::runtime_error("Leading zero");
+  if (try_read('.')) {
+    if (!std::isdigit(
+            current())) // EDGE CASE: reject "1." with no fraction digits
+      throw std::runtime_error("Missing fraction digits");
     while (std::isdigit(current()))
       advance();
   }
-  return std::stod(std::string(m_source_code.substr(start, m_current - start)));
+  if (try_read('e') || try_read('E')) {
+    try_read('+') || try_read('-');
+    if (!std::isdigit(current())) // EDGE CASE: reject "0e" or "0e+" where
+                                  // std::stod silently parses just the mantissa
+      throw std::runtime_error("Missing exponent digits");
+    while (std::isdigit(current()))
+      advance();
+  }
+  std::string num_str(m_source_code.substr(start, m_current - start));
+  size_t idx = 0;
+  double val = std::stod(num_str, &idx);
+  if (idx != num_str.size()) // EDGE CASE: std::stod may stop early (e.g. "0e"
+                             // -> "0"); ensure it consumed the entire token
+    throw std::runtime_error("Invalid number");
+  return val;
 }
 
 inline std::optional<Value> parser::try_parse_keyword() {
@@ -143,11 +221,14 @@ inline std::optional<Value> parser::try_parse_keyword() {
 inline Value::Array parser::parse_array() {
   Value::Array a;
   read('[', "Expected an opening bracket");
+  whitespace(); // EDGE CASE: allow whitespace before empty-array close (e.g. "[
+                // ]")
   if (try_read(']'))
     return a;
   do {
     whitespace();
-    a.push_back(parse());
+    a.push_back(parse_value()); // EDGE CASE: use parse_value for nested values
+                                // so parse() only runs at the top level
     whitespace();
   } while (try_read(','));
   read(']', "Expected a closing bracket");
@@ -157,6 +238,8 @@ inline Value::Array parser::parse_array() {
 inline Value::Object parser::parse_object() {
   Value::Object o;
   read('{', "Expected an opening brace");
+  whitespace(); // EDGE CASE: allow whitespace before empty-object close (e.g.
+                // "{  }")
   if (try_read('}'))
     return o;
   do {
@@ -165,7 +248,8 @@ inline Value::Object parser::parse_object() {
     whitespace();
     read(':', "Expected a colon");
     whitespace();
-    o.emplace(k, parse());
+    o.emplace(k, parse_value()); // EDGE CASE: use parse_value for nested values
+                                 // so parse() only runs at the top level
     whitespace();
   } while (try_read(','));
   read('}', "Expected a closing brace");

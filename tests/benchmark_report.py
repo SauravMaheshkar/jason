@@ -75,8 +75,9 @@ def format_unified_conformance_table(libs_scores: dict, libs: list) -> str:
                 seen.add(section)
                 all_sections.append(section)
 
-    lines = ["| Test | " + " | ".join(libs) + " |"]
-    lines.append("|------|" + "|".join(["------"] * len(libs)) + "|")
+    cols = ["Test"] + libs
+    lines = ["| " + " | ".join(cols) + " |"]
+    lines.append("|" + "|".join([":---:"] * len(cols)) + "|")
 
     # Per-library totals for overall row
     totals = {lib: (0, 0) for lib in libs}
@@ -120,8 +121,9 @@ def format_performance_table(perf: dict, libs: list) -> str:
     ]
     files = ["canada.json", "citm_catalog.json", "twitter.json", "jsonstat"]
 
-    lines = ["| Test | File | " + " | ".join(libs) + " |"]
-    lines.append("|------|------|" + "|".join(["------"] * len(libs)) + "|")
+    cols = ["Test", "File"] + libs
+    lines = ["| " + " | ".join(cols) + " |"]
+    lines.append("|" + "|".join([":---:"] * len(cols)) + "|")
 
     for csv_type, display_type in test_types:
         for file in files:
@@ -142,6 +144,41 @@ def format_performance_table(perf: dict, libs: list) -> str:
                 lines.append("| " + " | ".join(row) + " |")
     lines.append("")
     return "\n".join(lines)
+
+
+def update_readme(project_root: Path, conformance_table: str, performance_table: str) -> bool:
+    """Inject benchmark tables into README.md between HTML comment markers."""
+    readme_path = project_root / ".github" / "README.md"
+    if not readme_path.exists():
+        print("README.md not found at", readme_path)
+        return False
+
+    content = readme_path.read_text(encoding="utf-8")
+    start_marker = "<!-- benchmark-table-start -->"
+    end_marker = "<!-- benchmark-table-end -->"
+
+    start_idx = content.find(start_marker)
+    end_idx = content.find(end_marker)
+
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        print("Benchmark table markers not found in README.md; skipping inline update.")
+        return False
+
+    new_section = "\n".join([
+        start_marker,
+        "### Conformance",
+        "",
+        conformance_table,
+        "### Performance",
+        "",
+        performance_table,
+        end_marker,
+    ])
+
+    updated = content[:start_idx] + new_section + content[end_idx + len(end_marker):]
+    readme_path.write_text(updated, encoding="utf-8")
+    print(f"Updated benchmark tables in {readme_path}")
+    return True
 
 
 def main():
@@ -177,7 +214,10 @@ def main():
         if md_path.exists():
             libs_scores[lib] = parse_conformance(md_path)
 
-    # Build report
+    conformance_table = format_unified_conformance_table(libs_scores, libs_in_order)
+    performance_table = format_performance_table(perf, libs_in_order)
+
+    # Build standalone report
     report_lines = [
         "# Benchmark Report: jason vs nlohmann/json",
         "",
@@ -185,14 +225,11 @@ def main():
         "",
         "## Conformance",
         "",
-    ]
-    report_lines.append(format_unified_conformance_table(libs_scores, libs_in_order))
-
-    report_lines.extend([
+        conformance_table,
         "## Performance",
         "",
-        format_performance_table(perf, libs_in_order),
-    ])
+        performance_table,
+    ]
 
     # Add analysis note about jason
     if jason_name and nlohmann_name:
@@ -233,6 +270,9 @@ def main():
     report_path = script_dir / "benchmark_report.md"
     report_path.write_text("\n".join(report_lines), encoding="utf-8")
     print(f"Report written to {report_path}")
+
+    # Inline update README.md
+    update_readme(project_root, conformance_table, performance_table)
 
 
 if __name__ == "__main__":
