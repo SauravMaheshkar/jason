@@ -62,22 +62,52 @@ def parse_performance(csv_path: Path) -> dict:
     return data
 
 
-def format_conformance_table(name: str, scores: dict) -> str:
-    lines = [f"### {name}", "", "| Test | Score |", "|------|-------|"]
-    total_correct = 0
-    total_items = 0
-    for section, (correct, total) in scores.items():
+def format_unified_conformance_table(libs_scores: dict, libs: list) -> str:
+    """Build a single markdown conformance table with one column per library."""
+    # Collect all sections in order of first appearance across libraries
+    all_sections = []
+    seen = set()
+    for lib in libs:
+        if lib not in libs_scores:
+            continue
+        for section in libs_scores[lib].keys():
+            if section not in seen:
+                seen.add(section)
+                all_sections.append(section)
+
+    lines = ["| Test | " + " | ".join(libs) + " |"]
+    lines.append("|------|" + "|".join(["------"] * len(libs)) + "|")
+
+    # Per-library totals for overall row
+    totals = {lib: (0, 0) for lib in libs}
+
+    for section in all_sections:
+        row = [section]
+        for lib in libs:
+            if lib in libs_scores and section in libs_scores[lib]:
+                correct, total = libs_scores[lib][section]
+                if total == 0:
+                    row.append("-")
+                else:
+                    pct = correct / total * 100
+                    row.append(f"{correct}/{total} ({pct:.0f}%)")
+                totals[lib] = (totals[lib][0] + correct, totals[lib][1] + total)
+            else:
+                row.append("-")
+        lines.append("| " + " | ".join(row) + " |")
+
+    # Overall row
+    overall_row = ["**Overall**"]
+    for lib in libs:
+        correct, total = totals[lib]
         if total == 0:
-            lines.append(f"| {section} | - |")
+            overall_row.append("**-**")
         else:
             pct = correct / total * 100
-            lines.append(f"| {section} | {correct}/{total} ({pct:.0f}%) |")
-        total_correct += correct
-        total_items += total
-    if total_items:
-        overall_pct = total_correct / total_items * 100
-        lines.append(f"| **Overall** | **{total_correct}/{total_items} ({overall_pct:.0f}%)** |")
+            overall_row.append(f"**{correct}/{total} ({pct:.0f}%)**")
+    lines.append("| " + " | ".join(overall_row) + " |")
     lines.append("")
+
     return "\n".join(lines)
 
 
@@ -85,8 +115,6 @@ def format_performance_table(perf: dict, libs: list) -> str:
     """Build a markdown table for performance metrics."""
     test_types = [
         ("1. Parse", "Parse"),
-        ("2. Stringify", "Stringify"),
-        ("3. Prettify", "Prettify"),
         ("4. Statistics", "Statistics"),
         ("7. Code size", "Code size"),
     ]
@@ -143,13 +171,11 @@ def main():
             libs_in_order.append(l)
 
     # Parse conformance
-    conformance_blocks = []
+    libs_scores = {}
     for lib in libs_in_order:
-        safe = lib.replace(" ", " ")
         md_path = result_dir / f"conformance_{lib}.md"
         if md_path.exists():
-            scores = parse_conformance(md_path)
-            conformance_blocks.append(format_conformance_table(lib, scores))
+            libs_scores[lib] = parse_conformance(md_path)
 
     # Build report
     report_lines = [
@@ -160,7 +186,7 @@ def main():
         "## Conformance",
         "",
     ]
-    report_lines.extend(conformance_blocks)
+    report_lines.append(format_unified_conformance_table(libs_scores, libs_in_order))
 
     report_lines.extend([
         "## Performance",
@@ -179,8 +205,8 @@ def main():
             report_lines.extend([
                 "### Note on jason Performance",
                 "",
-                "**jason does not produce parse/stringify/prettify performance numbers**",
-                "because it fails to parse the standard benchmark test files",
+                "**jason does not produce parse performance numbers**",
+                "for the standard benchmark test files",
                 "(`canada.json`, `citm_catalog.json`, `twitter.json`).",
                 "The current jason implementation is intentionally minimal and lacks support for:",
                 "",
